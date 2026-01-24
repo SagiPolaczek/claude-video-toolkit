@@ -1,0 +1,9 @@
+[submodule "external/manim"]
+	path = external/manim
+	url = https://github.com/ManimCommunity/manim.git
+[submodule "external/soprano"]
+	path = external/soprano
+	url = https://github.com/ekwek1/soprano.git
+[submodule "external/qwen3-tts"]
+	path = external/qwen3-tts
+	url = https://github.com/QwenLM/Qwen3-TTS.git

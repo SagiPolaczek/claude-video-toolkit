@@ -205,3 +205,18 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Video Toolkit Cache Directories
+generated/
+tts_cache/
+segments/
+segments_with_audio/
+output/
+
+# External Submodule Build Artifacts
+external/*/build/
+external/*/.cache/
+external/*/dist/
+external/*/*.egg-info/
+external/*/__pycache__/
+external/manim/media/
