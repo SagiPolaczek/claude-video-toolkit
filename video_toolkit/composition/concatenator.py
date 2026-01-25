@@ -1,6 +1,4 @@
-"""
-Video concatenation utilities.
-"""
+"""Video concatenation utilities."""
 
 import subprocess
 import tempfile
@@ -8,6 +6,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, TYPE_CHECKING
+
+from moviepy import VideoFileClip, concatenate_videoclips
 
 if TYPE_CHECKING:
     from video_toolkit.config import ProjectConfig
@@ -23,28 +23,13 @@ class Concatenator(ABC):
         output: Path,
         config: Optional["ProjectConfig"] = None,
     ) -> Path:
-        """
-        Concatenate video files.
-
-        Args:
-            files: List of video file paths
-            output: Output file path
-            config: Optional project configuration
-
-        Returns:
-            Path to concatenated video
-        """
+        """Concatenate video files."""
         pass
 
 
 @dataclass
 class FFmpegConcatenator(Concatenator):
-    """
-    Fast concatenation using FFmpeg stream copy.
-
-    This method is fast because it doesn't re-encode the video,
-    but requires all input files to have the same codec settings.
-    """
+    """Fast concatenation using FFmpeg stream copy."""
 
     ffmpeg_path: str = "ffmpeg"
     overwrite: bool = True
@@ -55,17 +40,7 @@ class FFmpegConcatenator(Concatenator):
         output: Path,
         config: Optional["ProjectConfig"] = None,
     ) -> Path:
-        """
-        Concatenate videos using FFmpeg concat demuxer.
-
-        Args:
-            files: List of video file paths
-            output: Output file path
-            config: Optional project configuration
-
-        Returns:
-            Path to concatenated video
-        """
+        """Concatenate videos using FFmpeg concat demuxer."""
         cmd = self.build_command(files, output)
 
         result = subprocess.run(
@@ -80,28 +55,11 @@ class FFmpegConcatenator(Concatenator):
 
         return output
 
-    def build_command(
-        self,
-        files: List[Path],
-        output: Path,
-    ) -> str:
-        """
-        Build FFmpeg concat command.
-
-        Args:
-            files: List of video file paths
-            output: Output file path
-
-        Returns:
-            FFmpeg command string
-        """
-        # Create concat list file content
+    def build_command(self, files: List[Path], output: Path) -> str:
+        """Build FFmpeg concat command."""
         file_list = "|".join(f"file '{f}'" for f in files)
-
-        # Build command
         overwrite_flag = "-y" if self.overwrite else ""
 
-        # Use concat protocol for simple concatenation
         cmd = (
             f'{self.ffmpeg_path} {overwrite_flag} '
             f'-f concat -safe 0 -protocol_whitelist file,pipe '
@@ -111,28 +69,20 @@ class FFmpegConcatenator(Concatenator):
 
         return cmd
 
-    def concatenate_with_list_file(
-        self,
-        files: List[Path],
-        output: Path,
-    ) -> Path:
-        """
-        Concatenate using a temporary list file.
-
-        More compatible approach that works in all shells.
-        """
-        # Create temporary file list
+    def concatenate_with_list_file(self, files: List[Path], output: Path) -> Path:
+        """Concatenate using a temporary list file."""
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".txt",
             delete=False,
         ) as f:
             for file_path in files:
-                f.write(f"file '{file_path}'\n")
+                # Use absolute paths so ffmpeg can find files regardless of CWD
+                abs_path = Path(file_path).resolve()
+                f.write(f"file '{abs_path}'\n")
             list_file = Path(f.name)
 
         try:
-            overwrite_flag = "-y" if self.overwrite else ""
             cmd = [
                 self.ffmpeg_path,
                 "-y" if self.overwrite else "",
@@ -142,13 +92,9 @@ class FFmpegConcatenator(Concatenator):
                 "-c", "copy",
                 str(output),
             ]
-            cmd = [c for c in cmd if c]  # Remove empty strings
+            cmd = [c for c in cmd if c]
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode != 0:
                 raise RuntimeError(f"FFmpeg failed: {result.stderr}")
@@ -161,12 +107,7 @@ class FFmpegConcatenator(Concatenator):
 
 @dataclass
 class MoviePyConcatenator(Concatenator):
-    """
-    Concatenation using MoviePy.
-
-    This method re-encodes the video, which is slower but more flexible.
-    Use when input files have different codecs or settings.
-    """
+    """Concatenation using MoviePy."""
 
     fps: int = 30
     codec: str = "libx264"
@@ -179,32 +120,16 @@ class MoviePyConcatenator(Concatenator):
         output: Path,
         config: Optional["ProjectConfig"] = None,
     ) -> Path:
-        """
-        Concatenate videos using MoviePy.
-
-        Args:
-            files: List of video file paths
-            output: Output file path
-            config: Optional project configuration
-
-        Returns:
-            Path to concatenated video
-        """
-        from moviepy import VideoFileClip, concatenate_videoclips
-
-        # Load all clips
+        """Concatenate videos using MoviePy."""
         clips = [VideoFileClip(str(f)) for f in files]
 
         try:
-            # Concatenate
             final = concatenate_videoclips(clips, method="compose")
 
-            # Get settings from config or use defaults
             fps = config.fps if config else self.fps
             codec = config.codec if config else self.codec
             audio_codec = config.audio_codec if config else self.audio_codec
 
-            # Write output
             final.write_videofile(
                 str(output),
                 fps=fps,
@@ -216,7 +141,6 @@ class MoviePyConcatenator(Concatenator):
             return output
 
         finally:
-            # Clean up
             for clip in clips:
                 clip.close()
             if "final" in locals():

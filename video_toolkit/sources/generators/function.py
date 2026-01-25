@@ -5,7 +5,8 @@ Function-based content generator.
 from pathlib import Path
 from typing import Callable, Any, TYPE_CHECKING
 
-from .base import Generator, generate_cache_key
+from .base import Generator
+from ..base import generate_cache_key
 
 if TYPE_CHECKING:
     from video_toolkit.config import ProjectConfig

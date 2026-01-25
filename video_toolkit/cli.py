@@ -1,29 +1,22 @@
-"""
-Command-line interface for video toolkit.
-"""
+"""Command-line interface for video toolkit."""
 
 import argparse
 import sys
 from pathlib import Path
 from typing import List, Optional
 
+from .config import Resolution
+from .project import VideoProject
+from .tts_engines import get_engine
+
 
 def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
-    """
-    Parse command-line arguments.
-
-    Args:
-        args: List of arguments (defaults to sys.argv[1:])
-
-    Returns:
-        Parsed arguments namespace
-    """
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         prog="video_toolkit",
         description="Video Toolkit - Generate narrated presentation videos",
     )
 
-    # Resolution options
     resolution_group = parser.add_mutually_exclusive_group()
     resolution_group.add_argument(
         "--draft",
@@ -41,7 +34,6 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.set_defaults(resolution="standard")
 
-    # Single segment operations
     parser.add_argument(
         "--segment",
         metavar="ID",
@@ -53,7 +45,6 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="Build a single segment with audio by ID (Layer 3)",
     )
 
-    # Batch operations
     parser.add_argument(
         "--segments-all",
         action="store_true",
@@ -65,7 +56,6 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="Build all segments with audio (Layer 3)",
     )
 
-    # Concatenation
     parser.add_argument(
         "--concat",
         action="store_true",
@@ -77,7 +67,6 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="Concatenate all segments using MoviePy (slow, re-encodes)",
     )
 
-    # TTS options
     tts_group = parser.add_argument_group("TTS options")
     tts_group.add_argument(
         "--tts-engine",
@@ -95,14 +84,12 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="Disable TTS (generate video without narration audio)",
     )
 
-    # Output options
     parser.add_argument(
         "--output", "-o",
         default="./output/video.mp4",
         help="Output file path (default: ./output/video.mp4)",
     )
 
-    # Utility options
     parser.add_argument(
         "--list",
         action="store_true",
@@ -118,15 +105,7 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
 
 
 def main(args: Optional[List[str]] = None) -> int:
-    """
-    Main entry point for CLI.
-
-    Args:
-        args: Command-line arguments (defaults to sys.argv[1:])
-
-    Returns:
-        Exit code (0 for success)
-    """
+    """Main entry point for CLI."""
     parsed_args = parse_args(args)
 
     try:
@@ -140,22 +119,7 @@ def main(args: Optional[List[str]] = None) -> int:
 
 
 def run_command(args: argparse.Namespace) -> int:
-    """
-    Execute the command based on parsed arguments.
-
-    Args:
-        args: Parsed arguments
-
-    Returns:
-        Exit code
-    """
-    # Import here to avoid circular imports
-    from .project import VideoProject
-    from .config import Resolution
-    from .tts_engines import get_engine
-
-    # Create project (would normally load from a script file)
-    # For now, print a message about usage
+    """Execute the command based on parsed arguments."""
     if not any([
         args.segment,
         args.with_audio,
@@ -186,16 +150,13 @@ def run_command(args: argparse.Namespace) -> int:
         print("  --clean           Clear all caches")
         return 0
 
-    # Handle list command
     if args.list:
         print("Cache status listing requires a project script.")
         print("Run this command from a directory with a video project.")
         return 0
 
-    # Handle clean command
     if args.clean:
         print("Clearing caches...")
-        # Would clear caches here
         print("Done.")
         return 0
 

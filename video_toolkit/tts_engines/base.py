@@ -1,9 +1,8 @@
-"""
-Abstract base class for TTS engines.
-"""
+"""Abstract base class for TTS engines."""
 
 import hashlib
 import os
+import wave
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -40,10 +39,7 @@ class TTSEngine(ABC):
         pass
 
     def get_cache_params(self) -> dict:
-        """
-        Return additional parameters for cache key generation.
-        Override in subclasses for engine-specific params.
-        """
+        """Return additional parameters for cache key generation."""
         return {}
 
     def get_cache_key(self, text: str) -> str:
@@ -67,17 +63,7 @@ class TTSEngine(ABC):
         return self.get_cached_path(cache_key).exists()
 
     def synthesize_cached(self, text: str) -> str:
-        """
-        Synthesize with caching.
-
-        Returns cached audio if available, otherwise synthesizes and caches.
-
-        Args:
-            text: Text to synthesize
-
-        Returns:
-            Path to the audio file (cached or newly generated)
-        """
+        """Synthesize with caching."""
         cache_key = self.get_cache_key(text)
         cached_path = self.get_cached_path(cache_key)
 
@@ -87,22 +73,17 @@ class TTSEngine(ABC):
 
         print(f"  [Cache MISS] {cache_key} - synthesizing...")
 
-        # Synthesize to temporary path first
         temp_path = self.cache_dir / f"_temp_{cache_key}.wav"
         self.synthesize(text, str(temp_path))
-
-        # Move to final cached location
         temp_path.rename(cached_path)
 
         return str(cached_path)
 
 
 class DummyTTSEngine(TTSEngine):
-    """Dummy TTS engine for testing (produces no audio)."""
+    """Dummy TTS engine for testing (produces empty audio)."""
 
     def synthesize(self, text: str, output_path: str) -> str:
-        # Create empty WAV file
-        import wave
         with wave.open(output_path, 'w') as f:
             f.setnchannels(1)
             f.setsampwidth(2)

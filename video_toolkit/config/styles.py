@@ -67,7 +67,7 @@ class ColorScheme:
     text: Color = (30, 30, 40)
     accent: Color = (44, 125, 160)
     subtitle_bg: RGBAColor = (0, 0, 0, 180)
-    placeholder: Color = (240, 240, 245)
+    placeholder: Color = (255, 255, 255)  # White by default
 
 
 @dataclass(frozen=True)

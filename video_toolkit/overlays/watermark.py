@@ -1,10 +1,10 @@
-"""
-Watermark overlay implementation.
-"""
+"""Watermark overlay implementation."""
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union, TYPE_CHECKING
+
+from moviepy import CompositeVideoClip, TextClip, ImageClip
 
 from .base import Overlay
 
@@ -14,53 +14,40 @@ if TYPE_CHECKING:
 
 @dataclass
 class WatermarkOverlay(Overlay):
-    """
-    Watermark/logo overlay.
-
-    Can display either text or an image as a watermark,
-    positioned in a corner of the video.
-    """
+    """Watermark/logo overlay."""
 
     text: Optional[str] = None
     image_path: Optional[Union[str, Path]] = None
-    position: str = "bottom_right"  # top_left, top_right, bottom_left, bottom_right
+    position: str = "bottom_right"
     opacity: float = 0.5
-    font_size: int = 24  # For text watermarks
+    font_size: int = 24
     text_color: Tuple[int, int, int] = (255, 255, 255)
     margin: int = 20
     font: str = "Arial"
 
     def apply(self, clip: Any, config: "ProjectConfig") -> Any:
         """Apply watermark overlay to clip."""
-        from moviepy import CompositeVideoClip, TextClip, ImageClip
-
         dims = self.get_scaled_dimensions(config)
 
-        watermark = None
-
         if self.text:
-            try:
-                watermark = TextClip(
-                    text=self.text,
-                    font_size=dims["font_size"],
-                    color=f"rgb{self.text_color}",
-                    font=self.font,
-                ).with_duration(clip.duration).with_opacity(self.opacity)
-            except Exception:
-                pass
+            watermark = TextClip(
+                text=self.text,
+                font_size=dims["font_size"],
+                color=f"rgb{self.text_color}",
+                font=self.font,
+            ).with_duration(clip.duration).with_opacity(self.opacity)
 
         elif self.image_path:
-            try:
-                watermark = ImageClip(str(self.image_path))
-                watermark = watermark.with_duration(clip.duration)
-                watermark = watermark.with_opacity(self.opacity)
-            except Exception:
-                pass
+            image_path = Path(self.image_path)
+            if not image_path.exists():
+                raise FileNotFoundError(f"Watermark image not found: {image_path}")
+            watermark = ImageClip(str(image_path))
+            watermark = watermark.with_duration(clip.duration)
+            watermark = watermark.with_opacity(self.opacity)
 
-        if watermark is None:
+        else:
             return clip
 
-        # Calculate position
         x, y = self._calculate_position(
             watermark.size,
             config.dimensions,
