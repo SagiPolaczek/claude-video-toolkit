@@ -220,3 +220,11 @@ external/*/dist/
 external/*/*.egg-info/
 external/*/__pycache__/
 external/manim/media/
+
+# Node.js (Remotion backend)
+node_modules/
+video_toolkit/remotion/_node/dist/
+video_toolkit/remotion/_node/public/assets/
+
+# macOS
+.DS_Store

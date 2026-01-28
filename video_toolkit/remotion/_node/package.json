@@ -1,0 +1,23 @@
+{
+  "name": "video-toolkit-remotion",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Remotion rendering backend for video_toolkit. Source at external/remotion/ submodule.",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "studio": "remotion studio"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.409",
+    "@remotion/cli": "4.0.409",
+    "@remotion/renderer": "4.0.409",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "remotion": "4.0.409"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "typescript": "^5.4.0"
+  }
+}

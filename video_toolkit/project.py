@@ -14,6 +14,10 @@ from .overlays import TitleBarOverlay, SubtitleOverlay
 if TYPE_CHECKING:
     from .segments import Segment
     from .tts_engines import TTSEngine
+    from .remotion.config import RemotionConfig
+    from .remotion.renderer import RemotionRenderer
+
+_USE_DEFAULT_TTS = object()  # Sentinel for default TTS engine
 
 
 class VideoProject:
@@ -22,12 +26,13 @@ class VideoProject:
     def __init__(
         self,
         resolution: Union[Resolution, str] = Resolution.HD_1080,
-        tts_engine: Optional["TTSEngine"] = None,
+        tts_engine: Optional["TTSEngine"] = _USE_DEFAULT_TTS,
         default_overlays: Optional[Dict[str, bool]] = None,
         overlay_styles: Optional[Dict[str, Dict]] = None,
         output_dir: Union[str, Path] = "./output",
         cache_dir: Union[str, Path] = "./cache",
         fps: int = 30,
+        remotion_config: Optional["RemotionConfig"] = None,
     ):
         self.config = ProjectConfig(
             resolution=resolution,
@@ -36,7 +41,11 @@ class VideoProject:
             fps=fps,
         )
 
-        self.tts_engine = tts_engine
+        if tts_engine is _USE_DEFAULT_TTS:
+            from .tts_engines import SopranoTTSEngine
+            self.tts_engine = SopranoTTSEngine()
+        else:
+            self.tts_engine = tts_engine
         self.default_overlays = default_overlays or {}
         self.overlay_styles = overlay_styles or {}
         self.segments: List["Segment"] = []
@@ -44,6 +53,10 @@ class VideoProject:
         self.cache_manager = CacheManager(base_dir=self.config.cache_dir)
         self.audio_sync = AudioSync()
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Remotion support (lazy-initialized)
+        self._remotion_config = remotion_config
+        self._remotion_renderer: Optional["RemotionRenderer"] = None
 
     @property
     def mode(self) -> str:
@@ -55,8 +68,32 @@ class VideoProject:
         }
         return mode_map.get(self.config.resolution, "standard")
 
+    @property
+    def remotion_renderer(self) -> "RemotionRenderer":
+        """Get or create the Remotion renderer (lazy initialization).
+
+        Only created when the first RemotionSegment is added, so projects
+        that don't use Remotion pay zero overhead.
+        """
+        if self._remotion_renderer is None:
+            from .remotion.config import RemotionConfig
+            from .remotion.renderer import RemotionRenderer
+
+            config = self._remotion_config or RemotionConfig()
+            self._remotion_renderer = RemotionRenderer(config, self.config)
+        return self._remotion_renderer
+
     def add_segment(self, segment: "Segment") -> None:
-        """Add a segment to the project."""
+        """Add a segment to the project.
+
+        If the segment is a RemotionSegment without a renderer, the project's
+        shared RemotionRenderer is auto-injected.
+        """
+        from .remotion.segments import RemotionSegment
+
+        if isinstance(segment, RemotionSegment) and segment.renderer is None:
+            segment.renderer = self.remotion_renderer
+
         self.segments.append(segment)
 
     def get_segment(self, segment_id: str) -> "Segment":
@@ -140,7 +177,7 @@ class VideoProject:
             def make_silence(t):
                 if isinstance(t, np.ndarray):
                     return np.zeros((len(t), 2))
-                return np.zeros((1, 2))
+                return np.zeros(2)
 
             silent_audio = AudioClip(make_silence, duration=video_clip.duration, fps=44100)
             final_clip = video_clip.with_audio(silent_audio)
@@ -164,13 +201,104 @@ class VideoProject:
 
         All segments get audio tracks (silent if no narration) to ensure
         consistent streams for concatenation.
+
+        For RemotionTransition segments, extracts frames from neighbouring
+        segments before rendering the transition.
         """
+        self._prepare_transitions()
+
         paths = []
         for segment in self.segments:
-            # Always build with audio to ensure consistent streams
             path = self.build_segment_with_audio(segment.id)
             paths.append(path)
         return paths
+
+    def _prepare_transitions(self) -> None:
+        """Extract frames for any RemotionTransition segments that need them."""
+        from .remotion.transitions import RemotionTransition
+
+        for i, segment in enumerate(self.segments):
+            if not isinstance(segment, RemotionTransition):
+                continue
+            if not segment.needs_frames:
+                continue
+
+            # Find previous and next non-transition segments
+            prev_seg = None
+            next_seg = None
+            for j in range(i - 1, -1, -1):
+                if not isinstance(self.segments[j], RemotionTransition):
+                    prev_seg = self.segments[j]
+                    break
+            for j in range(i + 1, len(self.segments)):
+                if not isinstance(self.segments[j], RemotionTransition):
+                    next_seg = self.segments[j]
+                    break
+
+            if prev_seg is None or next_seg is None:
+                print(
+                    f"  [Warning] Transition '{segment.id}' has no "
+                    f"{'previous' if prev_seg is None else 'next'} segment"
+                )
+                continue
+
+            # Build the neighbouring segments (video only) so we can extract frames
+            prev_path = self.build_segment(prev_seg.id)
+            next_path = self.build_segment(next_seg.id)
+
+            # Extract last frame of previous and first frame of next
+            frames_dir = self.config.cache_dir / "transition_frames"
+            frames_dir.mkdir(parents=True, exist_ok=True)
+
+            from_frame = frames_dir / f"from_{segment.id}.png"
+            to_frame = frames_dir / f"to_{segment.id}.png"
+
+            self._extract_frame(prev_path, from_frame, position="last")
+            self._extract_frame(next_path, to_frame, position="first")
+
+            segment.set_frames(str(from_frame), str(to_frame))
+
+    @staticmethod
+    def _extract_frame(
+        video_path: Path, output_path: Path, position: str = "first"
+    ) -> None:
+        """Extract a single frame from a video file.
+
+        Args:
+            video_path: Path to the source video.
+            output_path: Where to save the extracted frame (PNG).
+            position: "first" or "last".
+        """
+        import subprocess
+
+        if position == "last":
+            # Seek near end - use ffprobe to get duration, then seek
+            probe = subprocess.run(
+                [
+                    "ffprobe", "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    str(video_path),
+                ],
+                capture_output=True, text=True,
+            )
+            duration = float(probe.stdout.strip()) if probe.stdout.strip() else 1.0
+            seek_time = max(0, duration - 0.1)
+            cmd = [
+                "ffmpeg", "-y", "-ss", str(seek_time),
+                "-i", str(video_path),
+                "-frames:v", "1", "-update", "1",
+                str(output_path),
+            ]
+        else:
+            cmd = [
+                "ffmpeg", "-y", "-ss", "0.033",
+                "-i", str(video_path),
+                "-frames:v", "1", "-update", "1",
+                str(output_path),
+            ]
+
+        subprocess.run(cmd, capture_output=True, timeout=30)
 
     def export(self, output_path: Union[str, Path]) -> Path:
         """Export final concatenated video."""

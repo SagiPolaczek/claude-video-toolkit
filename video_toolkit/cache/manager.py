@@ -13,12 +13,13 @@ from .combined import CombinedCache
 
 class CacheManager:
     """
-    Orchestrates the 4-layer cache system.
+    Orchestrates the 5-layer cache system.
 
     Manages cache invalidation cascades:
-    - Layer 0 (generated) → Layer 2 → Layer 3
-    - Layer 1 (TTS) → Layer 3
-    - Layer 2 (segments) → Layer 3
+    - Layer 0   (generated) → Layer 2 → Layer 3
+    - Layer 0.5 (remotion)  → Layer 2 → Layer 3
+    - Layer 1   (TTS)       → Layer 3
+    - Layer 2   (segments)  → Layer 3
     """
 
     def __init__(self, base_dir: Path = Path("./cache")):
@@ -32,6 +33,7 @@ class CacheManager:
 
         # Initialize all cache layers
         self.generated = GeneratedCache(base_dir=self.base_dir / "generated")
+        self.remotion = GeneratedCache(base_dir=self.base_dir / "remotion")
         self.tts = TTSCache(base_dir=self.base_dir / "tts")
         self.segments = SegmentCache(base_dir=self.base_dir / "segments")
         self.combined = CombinedCache(base_dir=self.base_dir / "combined")
@@ -162,6 +164,7 @@ class CacheManager:
         """
         return {
             "generated": self.generated.clear(),
+            "remotion": self.remotion.clear(),
             "tts": self.tts.clear(),
             "segments": self.segments.clear(),
             "combined": self.combined.clear(),
