@@ -143,7 +143,7 @@ class TestCombinedCache:
         assert cache.base_dir.exists()
 
     def test_combined_cache_path_format(self, temp_dir):
-        """CombinedCache paths should include segment ID, mode, and engine."""
+        """CombinedCache paths should include segment ID, mode, engine, and voice."""
         from video_toolkit.cache import CombinedCache
 
         cache = CombinedCache(base_dir=temp_dir / "combined")
@@ -157,6 +157,31 @@ class TestCombinedCache:
         assert "1" in path.name
         assert "standard" in path.name
         assert "soprano" in path.name
+
+    def test_combined_cache_differs_by_voice(self, temp_dir):
+        """Switching production voices must not reuse stale combined video."""
+        from video_toolkit.cache import CombinedCache
+
+        cache = CombinedCache(base_dir=temp_dir / "combined")
+        first = cache.get_path("1", "standard", "elevenlabs", "voice-a")
+        second = cache.get_path("1", "standard", "elevenlabs", "voice-b")
+
+        assert first != second
+
+    def test_invalidate_engine_removes_all_voice_variants(self, temp_dir):
+        """Engine invalidation should clear every cached voice variant."""
+        from video_toolkit.cache import CombinedCache
+
+        cache = CombinedCache(base_dir=temp_dir / "combined")
+        paths = [
+            cache.get_path("1", "standard", "elevenlabs", voice)
+            for voice in ("voice-a", "voice-b")
+        ]
+        for path in paths:
+            path.touch()
+
+        assert cache.invalidate_segment("1", "standard", "elevenlabs") == 2
+        assert not any(path.exists() for path in paths)
 
 
 class TestCacheManager:

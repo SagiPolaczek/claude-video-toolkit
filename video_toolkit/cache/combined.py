@@ -2,6 +2,7 @@
 Combined video+audio cache (Layer 3).
 """
 
+import hashlib
 from pathlib import Path
 
 from .base import CacheLayer
@@ -47,7 +48,10 @@ class CombinedCache(CacheLayer):
             Path to cached combined video
         """
         if segment_id is not None:
-            filename = f"segment_{segment_id}_{mode}_{engine}.mp4"
+            voice_key = hashlib.sha256(str(voice).encode()).hexdigest()[:10]
+            filename = (
+                f"segment_{segment_id}_{mode}_{engine}_{voice_key}.mp4"
+            )
         elif key is not None:
             filename = f"{key}.mp4"
         else:
@@ -88,11 +92,17 @@ class CombinedCache(CacheLayer):
         pattern = f"segment_{segment_id}_{mode}_*.mp4"
 
         if engine is not None:
-            # Specific engine
-            path = self.get_path(segment_id=segment_id, mode=mode, engine=engine)
-            if path.exists():
+            # Voice is intentionally omitted here: invalidating an engine must
+            # remove every voice variant, plus caches created before voice-aware
+            # filenames were introduced.
+            engine_pattern = f"segment_{segment_id}_{mode}_{engine}_*.mp4"
+            for path in self.base_dir.glob(engine_pattern):
                 path.unlink()
-                count = 1
+                count += 1
+            legacy_path = self.base_dir / f"segment_{segment_id}_{mode}_{engine}.mp4"
+            if legacy_path.exists():
+                legacy_path.unlink()
+                count += 1
         else:
             # All engines
             for path in self.base_dir.glob(pattern):

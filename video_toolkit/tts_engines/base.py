@@ -63,7 +63,7 @@ class TTSEngine(ABC):
         return self.get_cached_path(cache_key).exists()
 
     def synthesize_cached(self, text: str) -> str:
-        """Synthesize with caching."""
+        """Synthesize atomically and remove partial files after failures."""
         cache_key = self.get_cache_key(text)
         cached_path = self.get_cached_path(cache_key)
 
@@ -74,8 +74,20 @@ class TTSEngine(ABC):
         print(f"  [Cache MISS] {cache_key} - synthesizing...")
 
         temp_path = self.cache_dir / f"_temp_{cache_key}.wav"
-        self.synthesize(text, str(temp_path))
-        temp_path.rename(cached_path)
+        try:
+            self.synthesize(text, str(temp_path))
+            if not temp_path.exists():
+                raise RuntimeError(
+                    f"{self.get_name()} did not create the expected audio file: "
+                    f"{temp_path}"
+                )
+            temp_path.replace(cached_path)
+        finally:
+            # Cloud engines often create a temporary MP3 next to the requested
+            # WAV. Authentication, quota, and network failures must not leave
+            # those partial files behind or make later runs look cached.
+            for partial_path in self.cache_dir.glob(f"_temp_{cache_key}.*"):
+                partial_path.unlink(missing_ok=True)
 
         return str(cached_path)
 

@@ -49,6 +49,70 @@ class TestAudioSync:
         assert sync.padding_start == 0.5
         assert sync.padding_end == 1.0
 
+    def test_narration_timing_reports_overflow(self):
+        """Preflight timing should quantify narration that cannot fit."""
+        from video_toolkit.composition import AudioSync
+
+        sync = AudioSync(padding_start=0.25, padding_end=0.5)
+        timing = sync.timing(video=5.0, audio=5.5, segment_id="method")
+
+        assert timing.fits is False
+        assert timing.overflow_seconds == pytest.approx(1.25)
+
+    def test_error_policy_rejects_long_narration(self):
+        """Authored scene durations can opt out of silent speech clipping."""
+        from video_toolkit.composition import AudioSync, NarrationOverflowError
+
+        sync = AudioSync(
+            strategy="extend_audio",
+            padding_end=0.5,
+            overflow_policy="error",
+        )
+
+        with pytest.raises(NarrationOverflowError, match="exceeds"):
+            sync.calculate_duration(video=5.0, audio=5.0)
+
+    def test_extend_audio_fills_complete_visual_duration(self):
+        """Padded audio should keep valid frames through the end of a scene."""
+        import numpy as np
+        from moviepy import AudioClip, ColorClip
+        from video_toolkit.composition import AudioSync
+        from video_toolkit.config import ProjectConfig, Resolution
+
+        video = ColorClip((16, 16), color=(0, 0, 0), duration=2.0)
+        audio = AudioClip(lambda t: np.zeros(2), duration=0.5, fps=44100)
+        sync = AudioSync(strategy="extend_audio", padding_end=0.25)
+        result = sync.sync_clips(video, audio, ProjectConfig(Resolution.DRAFT))
+
+        try:
+            assert result.duration == pytest.approx(2.0)
+            assert result.audio.duration == pytest.approx(2.0)
+            assert result.audio.nchannels == 2
+        finally:
+            result.close()
+            audio.close()
+            video.close()
+
+    def test_extend_video_keeps_longer_visual_and_fills_audio(self):
+        """The default strategy must not shorten video when narration is brief."""
+        import numpy as np
+        from moviepy import AudioClip, ColorClip
+        from video_toolkit.composition import AudioSync
+        from video_toolkit.config import ProjectConfig, Resolution
+
+        video = ColorClip((16, 16), color=(0, 0, 0), duration=2.0)
+        audio = AudioClip(lambda t: np.zeros(2), duration=0.5, fps=44100)
+        sync = AudioSync(strategy="extend_video", padding_end=0.25)
+        result = sync.sync_clips(video, audio, ProjectConfig(Resolution.DRAFT))
+
+        try:
+            assert result.duration == pytest.approx(2.0)
+            assert result.audio.duration == pytest.approx(2.0)
+        finally:
+            result.close()
+            audio.close()
+            video.close()
+
 
 class TestCompositor:
     """Tests for Compositor."""

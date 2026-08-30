@@ -137,6 +137,28 @@ class TestEngineCacheKey:
         # Should be valid hex
         int(key, 16)
 
+    def test_failed_synthesis_removes_partial_files(self, temp_dir):
+        """API failures must not leave WAV/MP3 fragments in the cache."""
+        from video_toolkit.tts_engines import TTSEngine
+
+        class FailingEngine(TTSEngine):
+            def synthesize(self, text, output_path):
+                Path(output_path).with_suffix(".mp3").write_bytes(b"partial")
+                raise RuntimeError("network failed")
+
+            def get_name(self):
+                return "failing"
+
+            def get_voice(self):
+                return "test"
+
+        engine = FailingEngine(cache_dir=str(temp_dir / "tts"))
+
+        with pytest.raises(RuntimeError, match="network failed"):
+            engine.synthesize_cached("hello")
+
+        assert list((temp_dir / "tts").iterdir()) == []
+
 
 class TestEngineInterface:
     """Tests for engine interface consistency."""

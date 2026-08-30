@@ -186,3 +186,134 @@ class TestVideoProjectModeString:
         )
 
         assert project.mode == "standard"
+
+
+class TestProductionAudioWorkflow:
+    """Regression tests from production research-video rendering."""
+
+    def test_preserved_audio_cannot_be_mixed_with_narration(self, temp_dir):
+        from video_toolkit import VideoProject
+        from video_toolkit.segments import VideoSegment
+        from video_toolkit.sources import Placeholder
+
+        project = VideoProject(
+            tts_engine=None,
+            output_dir=temp_dir / "output",
+            cache_dir=temp_dir / "cache",
+        )
+        project.add_segment(VideoSegment(
+            id="intro",
+            source=Placeholder("intro"),
+            narration="Do not mix this with source sound.",
+            preserve_audio=True,
+        ))
+
+        with pytest.raises(ValueError, match="cannot use narration and preserve_audio"):
+            project.build_segment_with_audio("intro")
+
+    def test_preserved_audio_status_uses_source_cache_identity(self, temp_dir):
+        from video_toolkit import VideoProject
+        from video_toolkit.segments import VideoSegment
+        from video_toolkit.sources import Placeholder
+
+        project = VideoProject(
+            tts_engine=None,
+            output_dir=temp_dir / "output",
+            cache_dir=temp_dir / "cache",
+        )
+        project.add_segment(VideoSegment(
+            id="intro",
+            source=Placeholder("intro"),
+            preserve_audio=True,
+        ))
+        project.cache_manager.combined.get_path(
+            "intro", project.mode, "source", "original"
+        ).touch()
+
+        assert project.list_status()["intro"]["combined"] is True
+
+    def test_preflight_can_fail_before_visual_render(self, temp_dir):
+        import wave
+        from video_toolkit import VideoProject
+        from video_toolkit.composition import AudioSync, NarrationOverflowError
+        from video_toolkit.segments import TitleSegment
+        from video_toolkit.tts_engines import TTSEngine
+
+        class FixedDurationEngine(TTSEngine):
+            def synthesize(self, text, output_path):
+                with wave.open(output_path, "wb") as wav:
+                    wav.setnchannels(1)
+                    wav.setsampwidth(2)
+                    wav.setframerate(44100)
+                    wav.writeframes(b"\0\0" * 88200)
+                return output_path
+
+            def get_name(self):
+                return "fixed"
+
+            def get_voice(self):
+                return "two-seconds"
+
+        project = VideoProject(
+            tts_engine=FixedDurationEngine(str(temp_dir / "tts")),
+            audio_sync=AudioSync(
+                strategy="extend_audio",
+                padding_end=0.5,
+                overflow_policy="error",
+            ),
+            output_dir=temp_dir / "output",
+            cache_dir=temp_dir / "cache",
+        )
+        project.add_segment(TitleSegment(
+            id="short",
+            title="Short",
+            duration=1.0,
+            narration="This is deliberately too long.",
+        ))
+
+        with pytest.raises(NarrationOverflowError, match="Segment 'short'"):
+            project.preflight_narration(raise_on_overflow=True)
+
+    def test_preserved_source_audio_is_normalized(self, temp_dir):
+        import shutil
+        import subprocess
+
+        if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+            pytest.skip("ffmpeg and ffprobe are required")
+
+        from video_toolkit import VideoProject, validate_media
+        from video_toolkit.config import Resolution
+        from video_toolkit.segments import VideoSegment
+        from video_toolkit.sources import Asset
+
+        source = temp_dir / "intro.mp4"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=black:s=160x90:r=24:d=0.5",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+            "-t", "0.5", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-ar", "48000", "-ac", "1", str(source),
+        ], check=True)
+
+        project = VideoProject(
+            resolution=Resolution.DRAFT,
+            fps=20,
+            tts_engine=None,
+            output_dir=temp_dir / "output",
+            cache_dir=temp_dir / "cache",
+        )
+        project.add_segment(VideoSegment(
+            id="intro",
+            source=Asset(source),
+            duration=0.5,
+            scale="stretch",
+            preserve_audio=True,
+            overlays=None,
+        ))
+
+        rendered = project.build_segment_with_audio("intro")
+        report = validate_media(rendered, duration_tolerance=0.15)
+
+        assert report.sample_rate == 44100
+        assert report.channels == 2
+        assert report.fps == pytest.approx(20.0)

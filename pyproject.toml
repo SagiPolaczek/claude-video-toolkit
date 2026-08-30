@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "claude-video-toolkit"
-version = "0.1.0"
-description = "A modular video generation toolkit for creating narrated presentation videos"
+name = "agentic-video-toolkit"
+version = "0.2.0"
+description = "An agentic toolkit for creating polished narrated presentation videos"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}

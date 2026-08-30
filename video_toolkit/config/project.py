@@ -19,6 +19,9 @@ class ProjectConfig:
         fps: Frames per second (default: 30)
         codec: Video codec (default: libx264)
         audio_codec: Audio codec (default: aac)
+        audio_fps: Audio sample rate used for every rendered segment
+        audio_channels: Channel count used for every rendered segment
+        audio_bitrate: Audio bitrate used for every rendered segment
         preset: Encoding preset (default: medium)
         output_dir: Directory for output files
         cache_dir: Directory for cache files
@@ -28,6 +31,9 @@ class ProjectConfig:
     fps: int = 30
     codec: str = "libx264"
     audio_codec: str = "aac"
+    audio_fps: int = 44100
+    audio_channels: int = 2
+    audio_bitrate: str = "192k"
     preset: str = "medium"
     output_dir: Path = field(default_factory=lambda: Path("./output"))
     cache_dir: Path = field(default_factory=lambda: Path("./cache"))

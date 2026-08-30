@@ -213,6 +213,10 @@ segments/
 segments_with_audio/
 output/
 
+# Keep the toolkit's Python segment implementations under version control.
+!video_toolkit/segments/
+!video_toolkit/segments/*.py
+
 # External Submodule Build Artifacts
 external/*/build/
 external/*/.cache/

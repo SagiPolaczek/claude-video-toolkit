@@ -71,6 +71,8 @@ class FFmpegConcatenator(Concatenator):
 
     def concatenate_with_list_file(self, files: List[Path], output: Path) -> Path:
         """Concatenate using a temporary list file."""
+        output = Path(output)
+        output.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".txt",
@@ -88,8 +90,11 @@ class FFmpegConcatenator(Concatenator):
                 "-y" if self.overwrite else "",
                 "-f", "concat",
                 "-safe", "0",
+                "-fflags", "+genpts",
                 "-i", str(list_file),
                 "-c", "copy",
+                "-avoid_negative_ts", "make_zero",
+                "-movflags", "+faststart",
                 str(output),
             ]
             cmd = [c for c in cmd if c]

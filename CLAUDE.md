@@ -1,4 +1,4 @@
-# Claude Video Toolkit
+# Agentic Video Toolkit
 
 ## What This Is
 
@@ -6,13 +6,38 @@ A toolkit for generating narrated presentation videos from any source: websites,
 
 ## Critical Rules (READ FIRST)
 
-1. **EVERY segment MUST have narration** - including title and conclusion segments
+1. **EVERY segment MUST have narration or intentional source audio** - use
+   `preserve_audio=True` only for a finished clip whose soundtrack must survive
 2. **ALWAYS use real assets** - download from source, NEVER use Placeholder in final videos
-3. **ALWAYS use SopranoTTSEngine** - not DummyTTSEngine
+3. **Use SopranoTTSEngine for iteration, then the selected production voice** -
+   lock the script and preflight every final narration line before export
 4. **ALWAYS create project CLAUDE.md** - with source URL, asset manifest, video plan
 5. **ALWAYS add CLI with --force flag** - to rebuild cached segments
 6. **ALWAYS validate after building** - extract frames, check audio with ffprobe
-7. **ALWAYS verify final video has audio** - `ffprobe output.mp4 | grep Audio`
+7. **ALWAYS verify audio continuity, not only stream presence** - use
+   `validate_media(output, decode=True)` for the final release
+
+## Production lessons
+
+- Start from the actual paper/webpage assets. Do not reconstruct figures from
+  slide decks when production assets already exist.
+- A finished opening clip should be a `VideoSegment(..., preserve_audio=True)`.
+  The toolkit normalizes it to the same sample rate and channel layout as TTS
+  segments before stream-copy concatenation.
+- Use `AudioSync(strategy="extend_audio", overflow_policy="error")` for an
+  authored timeline. Run `project.preflight_narration(raise_on_overflow=True)`
+  after choosing the production voice; different voices have materially
+  different speaking rates.
+- Never paste API keys into source files. Set `ELEVENLABS_API_KEY` in the process
+  environment. Voice and model are part of the TTS cache key, and voice is part
+  of the combined A/V cache key.
+- Keep silence as real, full-duration audio frames. Every Layer 3 segment is
+  normalized to AAC, 44.1 kHz, stereo by default so concatenation has continuous
+  packet timestamps.
+- Minimal visual systems need explicit constraints: pin the font, reserve accent
+  rules for headings, align labels to each media column, test different column
+  counts, and inspect every asset state in the final compressed MP4.
+- Decode the full final file and test QR codes from compressed/downscaled frames.
 
 ## Creating a Video from a Website or Codebase
 

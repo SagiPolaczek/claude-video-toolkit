@@ -103,6 +103,19 @@ class TestVideoSegment:
         )
         assert seg.overlays is None
 
+    def test_video_segment_can_preserve_source_audio(self):
+        """Finished clips can opt into keeping their original soundtrack."""
+        from video_toolkit.segments import VideoSegment
+        from video_toolkit.sources import Asset
+
+        seg = VideoSegment(
+            id="intro",
+            source=Asset("./intro.mp4"),
+            preserve_audio=True,
+        )
+
+        assert seg.preserve_audio is True
+
 
 class TestImageSegment:
     """Tests for ImageSegment."""

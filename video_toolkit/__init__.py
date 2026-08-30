@@ -7,12 +7,16 @@ with support for static assets and programmatically generated content.
 
 from .config import Resolution, ProjectConfig
 from .project import VideoProject
+from .validation import MediaValidationError, MediaValidationReport, validate_media
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "VideoProject",
     "Resolution",
     "ProjectConfig",
+    "MediaValidationError",
+    "MediaValidationReport",
+    "validate_media",
     "__version__",
 ]
